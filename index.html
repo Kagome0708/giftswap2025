@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>礼物互换调查问卷</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 700px;
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #adminPanel {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #e74c3c;
+            border-radius: 8px;
+            background-color: #f9ebea;
+        }
+        .hidden { display: none; }
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            border: none;
+            color: white;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .btn-submit { background-color: #3498db; }
+        .btn-admin { background-color: #2ecc71; }
+        .btn-action { background-color: #e67e22; }
+        .btn-clear { background-color: #c0392b; }
+        h1, h2, h3 { color: #333; }
+        #giftAssignments, #participantList, #nonParticipantList {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            min-height: 40px;
+        }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 5px; }
+        .special-notice-container {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px dashed #aaa;
+        }
+        .special-notice-item {
+            color: #d35400; /* Orange color for attention */
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>礼物互换活动调查问卷</h1>
+        <form id="surveyForm">
+            <div>
+                <label for="personalInfo">1. 你的个人信息 (例如: 高一张三):</label><br>
+                <input type="text" id="personalInfo" required style="width: 98%; padding: 8px;">
+            </div>
+            <br>
+            <div>
+                <p>2. 你是否愿意参加本次互换礼物活动?</p>
+                <input type="radio" id="participateYes" name="participate" value="yes" required>
+                <label for="participateYes">是</label>
+                <input type="radio" id="participateNo" name="participate" value="no">
+                <label for="participateNo">否</label>
+            </div>
+            <br>
+            <div id="designatedGifterQuestion" class="hidden">
+                <p>3. 你是否有指定的送礼对象?</p>
+                <input type="radio" id="designatedYes" name="designated" value="yes">
+                <label for="designatedYes">是</label>
+                <input type="radio" id="designatedNo" name="designated" value="no" checked>
+                <label for="designatedNo">否</label>
+            </div>
+            <br>
+            <div id="designatedPersonInfo" class="hidden">
+                <label for="designatedPerson">4. 你指定的送礼对象信息 (例如: 高二李四):</label><br>
+                <input type="text" id="designatedPerson" style="width: 98%; padding: 8px;">
+            </div>
+            <br>
+            <button type="submit" class="btn-submit">提交问卷</button>
+        </form>
+    </div>
+
+    <div class="container">
+        <h2>管理员入口</h2>
+        <input type="password" id="adminPassword" placeholder="请输入管理员密码" style="padding: 8px;">
+        <button onclick="accessAdminPanel()" class="btn-admin">登录</button>
+    </div>
+
+    <div id="adminPanel" class="container">
+        <h2>管理员控制面板</h2>
+        <button onclick="generateLists()" class="btn-action">生成名单</button>
+        <button onclick="assignGifts()" class="btn-action">一键分配送礼</button>
+        <button onclick="clearData()" class="btn-clear">一键清除储存数据</button>
+        
+        <h3>参与者名单:</h3>
+        <div id="participantList"></div>
+
+        <h3>不参加者名单:</h3>
+        <div id="nonParticipantList"></div>
+
+        <h3>送礼分配结果:</h3>
+        <div id="giftAssignments"></div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- START: Firebase 连接代码 (新增) -->
+    <!-- 1. 引入 Firebase 官方的 JS 文件 -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <!-- 2. 初始化 Firebase 连接 -->
+    <script>
+        // 这是您提供的 Firebase 配置信息
+        const firebaseConfig = {
+            apiKey: "AIzaSyBk882-cRj4gEjSrd1hbHYeJoD7zU2D0MY",
+            authDomain: "giftswap2025.firebaseapp.com",
+            databaseURL: "https://giftswap2025-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "giftswap2025",
+            storageBucket: "giftswap2025.firebasestorage.app",
+            messagingSenderId: "1031620704962",
+            appId: "1:1031620704962:web:e4adf5a79b55c17399995b",
+            measurementId: "G-41E2G5QD1K"
+        };
+
+        // 初始化 Firebase 应用
+        firebase.initializeApp(firebaseConfig);
+        // 获取数据库的引用，之后我们就用 'database' 这个变量来操作
+        const database = firebase.database();
+    </script>
+    <!-- END: Firebase 连接代码 -->
+    <!-- =================================================================== -->
+
+
+    <script>
+        // 定义一个全局变量，用于存储从 Firebase 同步过来的所有数据
+        let allSubmissionsData = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const surveyForm = document.getElementById('surveyForm');
+            const participateYes = document.getElementById('participateYes');
+            const participateNo = document.getElementById('participateNo');
+            const designatedGifterQuestion = document.getElementById('designatedGifterQuestion');
+            const designatedYes = document.getElementById('designatedYes');
+            const designatedNo = document.getElementById('designatedNo');
+            const designatedPersonInfo = document.getElementById('designatedPersonInfo');
+
+            participateYes.addEventListener('change', () => { if (participateYes.checked) designatedGifterQuestion.classList.remove('hidden'); });
+            participateNo.addEventListener('change', () => { if (participateNo.checked) { designatedGifterQuestion.classList.add('hidden'); designatedPersonInfo.classList.add('hidden'); } });
+            designatedYes.addEventListener('change', () => { if (designatedYes.checked) designatedPersonInfo.classList.remove('hidden'); });
+            designatedNo.addEventListener('change', () => { if (designatedNo.checked) designatedPersonInfo.classList.add('hidden'); });
+
+            surveyForm.addEventListener('submit', function(event) {
+                event.preventDefault();
+                const personalInfo = document.getElementById('personalInfo').value;
+                if (!personalInfo.trim()) { alert('请输入你的个人信息！'); return; }
+                const willParticipate = document.querySelector('input[name="participate"]:checked').value === 'yes';
+
+                // --- 修改: 准备要发送到 Firebase 的数据对象 ---
+                const submissionData = {
+                    name: personalInfo,
+                    participating: willParticipate,
+                    givesTo: null, // 默认为 null
+                    submittedAt: new Date().toISOString() // 增加一个提交时间
+                };
+
+                if (willParticipate) {
+                    const hasDesignated = document.querySelector('input[name="designated"]:checked').value === 'yes';
+                    if (hasDesignated) {
+                        const designatedPerson = document.getElementById('designatedPerson').value;
+                        if (!designatedPerson.trim()) { alert('请输入你指定的送礼对象信息！'); return; }
+                        submissionData.givesTo = designatedPerson;
+                    }
+                }
+                
+                // --- 修改: 将 localStorage 操作替换为 Firebase 操作 ---
+                // 使用 .set() 和以名字为键，可以防止同一个人重复提交，新的提交会覆盖旧的
+                database.ref('submissions/' + personalInfo).set(submissionData)
+                    .then(() => {
+                        alert('问卷提交成功！感谢您的回应。');
+                        this.reset();
+                        designatedGifterQuestion.classList.add('hidden');
+                        designatedPersonInfo.classList.add('hidden');
+                    })
+                    .catch((error) => {
+                        alert('提交失败，请检查网络后重试: ' + error.message);
+                    });
+            });
+        });
+
+        function accessAdminPanel() {
+            if (document.getElementById('adminPassword').value === 'admin123') {
+                document.getElementById('adminPanel').style.display = 'block';
+                
+                // --- 新增: 登录成功后，从 Firebase 拉取并实时监听数据 ---
+                const submissionsRef = database.ref('submissions/');
+                submissionsRef.on('value', (snapshot) => {
+                    const data = snapshot.val();
+                    // 将 Firebase 返回的对象数据转换为数组，方便后续处理
+                    allSubmissionsData = data ? Object.values(data) : []; 
+                    console.log("数据已从云端同步:", allSubmissionsData);
+                    alert('数据已从云端同步！');
+                    // 自动刷新一下列表
+                    generateLists();
+                }, (error) => {
+                    console.error(error);
+                    alert("从云端获取数据失败，请检查 Firebase 配置和安全规则。");
+                });
+
+            } else { alert('密码错误！'); }
+        }
+
+        function generateLists() {
+            // --- 修改: 数据源从 localStorage 改为全局变量 allSubmissionsData ---
+            const participants = allSubmissionsData.filter(p => p.participating);
+            const nonParticipants = allSubmissionsData.filter(p => !p.participating).map(p => p.name);
+
+            const participantListContainer = document.getElementById('participantList');
+            const nonParticipantListContainer = document.getElementById('nonParticipantList');
+            participantListContainer.innerHTML = '';
+            nonParticipantListContainer.innerHTML = '';
+
+            if (participants.length === 0) participantListContainer.innerHTML = '<p>目前无人参加。</p>';
+            else {
+                const ul = document.createElement('ul');
+                participants.forEach(p => {
+                    const li = document.createElement('li');
+                    // 注意: 参与者现在是对象，所以要用 p.name 和 p.givesTo
+                    li.textContent = p.givesTo ? `${p.name} (指定送给: ${p.givesTo})` : p.name;
+                    ul.appendChild(li);
+                });
+                participantListContainer.appendChild(ul);
+            }
+
+            if (nonParticipants.length === 0) nonParticipantListContainer.innerHTML = '<p>目前无人选择不参加。</p>';
+            else {
+                const ul = document.createElement('ul');
+                nonParticipants.forEach(name => {
+                    const li = document.createElement('li');
+                    li.textContent = name;
+                    ul.appendChild(li);
+                });
+                nonParticipantListContainer.appendChild(ul);
+            }
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function assignGifts() {
+            // --- 修改: 数据源从 localStorage 改为全局变量 allSubmissionsData ---
+            const participants = allSubmissionsData.filter(p => p.participating);
+            
+            const assignmentsContainer = document.getElementById('giftAssignments');
+            assignmentsContainer.innerHTML = '';
+
+            if (participants.length === 0) {
+                assignmentsContainer.innerHTML = '<p>无参与者，无法分配。</p>';
+                return;
+            }
+
+            const finalAssignments = [];
+            const specialNotices = [];
+            const allParticipantNames = new Set(participants.map(p => p.name));
+
+            let availableGivers = new Set(allParticipantNames);
+            let availableReceivers = new Set(allParticipantNames);
+            
+            const giversInNotice = new Set();
+            const receiversInNotice = new Set();
+
+            const recipientMap = new Map();
+            participants.forEach(p => {
+                if (p.givesTo) {
+                    if (!recipientMap.has(p.givesTo)) recipientMap.set(p.givesTo, []);
+                    recipientMap.get(p.givesTo).push(p.name);
+                }
+            });
+            
+            recipientMap.forEach((givers, receiver) => {
+                if (givers.length > 1 && allParticipantNames.has(receiver)) {
+                    specialNotices.push(`[${givers.join(', ')}] 同时送礼给 ${receiver}，须人工交涉。`);
+                    givers.forEach(giver => {
+                        availableGivers.delete(giver);
+                        giversInNotice.add(giver);
+                    });
+                    availableReceivers.delete(receiver);
+                    receiversInNotice.add(receiver);
+                }
+            });
+
+            participants.forEach(p => {
+                const giver = p.name;
+                const receiver = p.givesTo;
+
+                if (!availableGivers.has(giver)) return;
+
+                if (receiver) {
+                    if (!allParticipantNames.has(receiver)) {
+                        specialNotices.push(`${giver} 送礼给了不参与者(${receiver})，须人工交涉。`);
+                        availableGivers.delete(giver);
+                        giversInNotice.add(giver);
+                    } 
+                    else if (availableReceivers.has(receiver)) {
+                        finalAssignments.push({ giver, receiver });
+                        availableGivers.delete(giver);
+                        availableReceivers.delete(receiver);
+                    }
+                }
+            });
+            
+            let randomGivers = shuffleArray(Array.from(availableGivers));
+            let randomReceivers = shuffleArray(Array.from(availableReceivers));
+
+            randomGivers.forEach(giver => {
+                for (let i = 0; i < randomReceivers.length; i++) {
+                    const receiver = randomReceivers[i];
+                    if (giver !== receiver) {
+                        finalAssignments.push({ giver, receiver });
+                        randomReceivers.splice(i, 1);
+                        break;
+                    }
+                }
+            });
+
+            const ul = document.createElement('ul');
+            if (finalAssignments.length === 0 && specialNotices.length === 0) {
+                ul.innerHTML = '<li>没有有效的分配。</li>';
+            } else {
+                finalAssignments.sort((a,b) => a.giver.localeCompare(b.giver)).forEach(pair => {
+                    const li = document.createElement('li');
+                    li.textContent = `${pair.giver}  ->  ${pair.receiver}`;
+                    ul.appendChild(li);
+                });
+            }
+            assignmentsContainer.appendChild(ul);
+            
+            const noticeContainer = document.createElement('div');
+            noticeContainer.className = 'special-notice-container';
+            let noticeHTML = '';
+
+            if (specialNotices.length > 0) {
+                specialNotices.forEach(note => {
+                    noticeHTML += `<div class="special-notice-item">${note}</div>`;
+                });
+            }
+
+            const finalAssignedGivers = new Set(finalAssignments.map(p => p.giver));
+            const finalAssignedReceivers = new Set(finalAssignments.map(p => p.receiver));
+            
+            const leftoverGivers = Array.from(allParticipantNames).filter(name => !finalAssignedGivers.has(name) && !giversInNotice.has(name));
+            const leftoverReceivers = Array.from(allParticipantNames).filter(name => !finalAssignedReceivers.has(name) && !receiversInNotice.has(name));
+            
+            if (leftoverGivers.length > 0) {
+                noticeHTML += `<p><strong>未能送出礼物的人:</strong> ${leftoverGivers.join(', ')}</p>`;
+            }
+            if (leftoverReceivers.length > 0) {
+                noticeHTML += `<p><strong>未能收到礼物的人:</strong> ${leftoverReceivers.join(', ')}</p>`;
+            }
+            
+            if (noticeHTML) {
+                noticeContainer.innerHTML = noticeHTML;
+                assignmentsContainer.appendChild(noticeContainer);
+            }
+        }
+
+        function clearData() {
+            if (confirm('你确定要清除所有云端问卷数据吗？此操作无法撤销。')) {
+                // --- 修改: 将 localStorage 操作替换为 Firebase 的 remove 操作 ---
+                database.ref('submissions/').remove()
+                    .then(() => {
+                        // 清空本地存储的变量并刷新显示
+                        allSubmissionsData = [];
+                        generateLists();
+                        document.getElementById('giftAssignments').innerHTML = '';
+                        alert('云端所有数据已被清除。');
+                    })
+                    .catch((error) => {
+                        alert("清除失败: " + error.message);
+                    });
+            }
+        }
+    </script>
+</body>
+</html>
