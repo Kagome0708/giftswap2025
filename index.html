@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>礼物互换调查问卷</title>
+    <title>礼物互换调查问卷 (v2.0 优化版)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -73,7 +73,8 @@
         <h1>礼物互换活动调查问卷</h1>
         <form id="surveyForm">
             <div>
-                <label for="personalInfo">1. 你的个人信息 (例如: 高一张三):</label><br>
+                <!-- 修改 1: 优化提示文本 -->
+                <label for="personalInfo">1. 你的个人信息 (必须按照年级姓名的形式填写！（例：高一张三）):</label><br>
                 <input type="text" id="personalInfo" required style="width: 98%; padding: 8px;">
             </div>
             <br>
@@ -94,7 +95,8 @@
             </div>
             <br>
             <div id="designatedPersonInfo" class="hidden">
-                <label for="designatedPerson">4. 你指定的送礼对象信息 (例如: 高二李四):</label><br>
+                 <!-- 修改 1: 优化提示文本 -->
+                <label for="designatedPerson">4. 你指定的送礼对象信息 (必须按照年级姓名的形式填写！（例：高二李四）):</label><br>
                 <input type="text" id="designatedPerson" style="width: 98%; padding: 8px;">
             </div>
             <br>
@@ -124,15 +126,10 @@
         <div id="giftAssignments"></div>
     </div>
 
-    <!-- =================================================================== -->
-    <!-- START: Firebase 连接代码 (新增) -->
-    <!-- 1. 引入 Firebase 官方的 JS 文件 -->
+    <!-- Firebase 连接代码 (无变动) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-
-    <!-- 2. 初始化 Firebase 连接 -->
     <script>
-        // 这是您提供的 Firebase 配置信息
         const firebaseConfig = {
             apiKey: "AIzaSyBk882-cRj4gEjSrd1hbHYeJoD7zU2D0MY",
             authDomain: "giftswap2025.firebaseapp.com",
@@ -143,19 +140,28 @@
             appId: "1:1031620704962:web:e4adf5a79b55c17399995b",
             measurementId: "G-41E2G5QD1K"
         };
-
-        // 初始化 Firebase 应用
         firebase.initializeApp(firebaseConfig);
-        // 获取数据库的引用，之后我们就用 'database' 这个变量来操作
         const database = firebase.database();
     </script>
-    <!-- END: Firebase 连接代码 -->
-    <!-- =================================================================== -->
 
 
     <script>
-        // 定义一个全局变量，用于存储从 Firebase 同步过来的所有数据
         let allSubmissionsData = [];
+
+        // --- 修改 2: 逻辑优化 - 创建一个独立的保存函数，避免代码重复 ---
+        function saveSubmission(submissionData, formElement) {
+            database.ref('submissions/' + submissionData.name).set(submissionData)
+                .then(() => {
+                    alert('问卷提交成功！感谢您的回应。');
+                    formElement.reset();
+                    document.getElementById('designatedGifterQuestion').classList.add('hidden');
+                    document.getElementById('designatedPersonInfo').classList.add('hidden');
+                })
+                .catch((error) => {
+                    alert('提交失败，请检查网络后重试: ' + error.message);
+                });
+        }
+
 
         document.addEventListener('DOMContentLoaded', function() {
             const surveyForm = document.getElementById('surveyForm');
@@ -171,22 +177,23 @@
             designatedYes.addEventListener('change', () => { if (designatedYes.checked) designatedPersonInfo.classList.remove('hidden'); });
             designatedNo.addEventListener('change', () => { if (designatedNo.checked) designatedPersonInfo.classList.add('hidden'); });
 
+            // --- 修改 2: 逻辑优化 - 重写表单提交事件 ---
             surveyForm.addEventListener('submit', function(event) {
                 event.preventDefault();
                 const personalInfo = document.getElementById('personalInfo').value;
                 if (!personalInfo.trim()) { alert('请输入你的个人信息！'); return; }
                 const willParticipate = document.querySelector('input[name="participate"]:checked').value === 'yes';
 
-                // --- 修改: 准备要发送到 Firebase 的数据对象 ---
                 const submissionData = {
                     name: personalInfo,
                     participating: willParticipate,
-                    givesTo: null, // 默认为 null
-                    submittedAt: new Date().toISOString() // 增加一个提交时间
+                    givesTo: null,
+                    submittedAt: new Date().toISOString()
                 };
 
+                let hasDesignated = false;
                 if (willParticipate) {
-                    const hasDesignated = document.querySelector('input[name="designated"]:checked').value === 'yes';
+                    hasDesignated = document.querySelector('input[name="designated"]:checked').value === 'yes';
                     if (hasDesignated) {
                         const designatedPerson = document.getElementById('designatedPerson').value;
                         if (!designatedPerson.trim()) { alert('请输入你指定的送礼对象信息！'); return; }
@@ -194,45 +201,58 @@
                     }
                 }
                 
-                // --- 修改: 将 localStorage 操作替换为 Firebase 操作 ---
-                // 使用 .set() 和以名字为键，可以防止同一个人重复提交，新的提交会覆盖旧的
-                database.ref('submissions/' + personalInfo).set(submissionData)
-                    .then(() => {
-                        alert('问卷提交成功！感谢您的回应。');
-                        this.reset();
-                        designatedGifterQuestion.classList.add('hidden');
-                        designatedPersonInfo.classList.add('hidden');
-                    })
-                    .catch((error) => {
-                        alert('提交失败，请检查网络后重试: ' + error.message);
-                    });
+                // 如果没有指定送礼，或者不参加，直接保存
+                if (!hasDesignated) {
+                    saveSubmission(submissionData, this);
+                    return;
+                }
+
+                // 如果指定了送礼对象，则先检查数据库是否已被占用
+                const designatedRecipient = submissionData.givesTo;
+                database.ref('submissions').once('value').then((snapshot) => {
+                    const submissions = snapshot.val();
+                    let isRecipientTaken = false;
+                    if (submissions) {
+                        for (const submitterName in submissions) {
+                            // 检查【其他人】(名字不同)是否已指定了同一个人
+                            if (submitterName !== personalInfo && submissions[submitterName].givesTo === designatedRecipient) {
+                                isRecipientTaken = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (isRecipientTaken) {
+                        // 冲突：弹窗提示并终止提交
+                        alert('此学生已收到来自其他人的定向送礼，请重新选择！');
+                    } else {
+                        // 无冲突：保存数据
+                        saveSubmission(submissionData, this);
+                    }
+                }).catch(error => {
+                    alert("检查数据时出错，请重试: " + error.message);
+                });
             });
         });
 
         function accessAdminPanel() {
             if (document.getElementById('adminPassword').value === 'admin123') {
                 document.getElementById('adminPanel').style.display = 'block';
-                
-                // --- 新增: 登录成功后，从 Firebase 拉取并实时监听数据 ---
                 const submissionsRef = database.ref('submissions/');
                 submissionsRef.on('value', (snapshot) => {
                     const data = snapshot.val();
-                    // 将 Firebase 返回的对象数据转换为数组，方便后续处理
                     allSubmissionsData = data ? Object.values(data) : []; 
                     console.log("数据已从云端同步:", allSubmissionsData);
                     alert('数据已从云端同步！');
-                    // 自动刷新一下列表
                     generateLists();
                 }, (error) => {
                     console.error(error);
                     alert("从云端获取数据失败，请检查 Firebase 配置和安全规则。");
                 });
-
             } else { alert('密码错误！'); }
         }
 
         function generateLists() {
-            // --- 修改: 数据源从 localStorage 改为全局变量 allSubmissionsData ---
             const participants = allSubmissionsData.filter(p => p.participating);
             const nonParticipants = allSubmissionsData.filter(p => !p.participating).map(p => p.name);
 
@@ -246,7 +266,6 @@
                 const ul = document.createElement('ul');
                 participants.forEach(p => {
                     const li = document.createElement('li');
-                    // 注意: 参与者现在是对象，所以要用 p.name 和 p.givesTo
                     li.textContent = p.givesTo ? `${p.name} (指定送给: ${p.givesTo})` : p.name;
                     ul.appendChild(li);
                 });
@@ -274,9 +293,7 @@
         }
 
         function assignGifts() {
-            // --- 修改: 数据源从 localStorage 改为全局变量 allSubmissionsData ---
             const participants = allSubmissionsData.filter(p => p.participating);
-            
             const assignmentsContainer = document.getElementById('giftAssignments');
             assignmentsContainer.innerHTML = '';
 
@@ -295,43 +312,24 @@
             const giversInNotice = new Set();
             const receiversInNotice = new Set();
 
-            const recipientMap = new Map();
-            participants.forEach(p => {
-                if (p.givesTo) {
-                    if (!recipientMap.has(p.givesTo)) recipientMap.set(p.givesTo, []);
-                    recipientMap.get(p.givesTo).push(p.name);
-                }
-            });
-            
-            recipientMap.forEach((givers, receiver) => {
-                if (givers.length > 1 && allParticipantNames.has(receiver)) {
-                    specialNotices.push(`[${givers.join(', ')}] 同时送礼给 ${receiver}，须人工交涉。`);
-                    givers.forEach(giver => {
-                        availableGivers.delete(giver);
-                        giversInNotice.add(giver);
-                    });
-                    availableReceivers.delete(receiver);
-                    receiversInNotice.add(receiver);
-                }
-            });
+            // --- 修改 3: 代码清理 - 移除旧的“多人送一人”冲突检测逻辑，因为它已被前端阻止 ---
 
+            // 处理无冲突的指定送礼 和 送礼给不参与者
             participants.forEach(p => {
                 const giver = p.name;
                 const receiver = p.givesTo;
 
-                if (!availableGivers.has(giver)) return;
+                if (!availableGivers.has(giver) || !receiver) return;
 
-                if (receiver) {
-                    if (!allParticipantNames.has(receiver)) {
-                        specialNotices.push(`${giver} 送礼给了不参与者(${receiver})，须人工交涉。`);
-                        availableGivers.delete(giver);
-                        giversInNotice.add(giver);
-                    } 
-                    else if (availableReceivers.has(receiver)) {
-                        finalAssignments.push({ giver, receiver });
-                        availableGivers.delete(giver);
-                        availableReceivers.delete(receiver);
-                    }
+                if (!allParticipantNames.has(receiver)) {
+                    specialNotices.push(`${giver} 送礼给了不参与者(${receiver})，须人工交涉。`);
+                    availableGivers.delete(giver);
+                    giversInNotice.add(giver);
+                } 
+                else if (availableReceivers.has(receiver)) {
+                    finalAssignments.push({ giver, receiver });
+                    availableGivers.delete(giver);
+                    availableReceivers.delete(receiver);
                 }
             });
             
@@ -392,10 +390,8 @@
 
         function clearData() {
             if (confirm('你确定要清除所有云端问卷数据吗？此操作无法撤销。')) {
-                // --- 修改: 将 localStorage 操作替换为 Firebase 的 remove 操作 ---
                 database.ref('submissions/').remove()
                     .then(() => {
-                        // 清空本地存储的变量并刷新显示
                         allSubmissionsData = [];
                         generateLists();
                         document.getElementById('giftAssignments').innerHTML = '';
